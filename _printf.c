@@ -1,68 +1,93 @@
 #include "main.h"
 
-void print_buffer(char buffer[], int *buff_ind);
+void cleanup(va_list args, buffer_t *output);
+int run_printf(const char *format, va_list args, buffer_t *output);
+int _printf(const char *format, ...);
 
 /**
- * _printf -THE PRINTF FUNCTION ..
- * @format: FORMAT..
- * RETURN: PRINTED characters.
+ * cleanup - PERFORMS CLEANUP OPERATIONS for _printf..
+ * @args: A va_list of arguments provided to _printf..
+ * @output: A BUFFER_t struct.
+ */
+
+void cleanup(va_list args, buffer_t *output)
+{
+	va_end(args);
+	write(1, output->start, output->len);
+	free_buffer(output);
+}
+
+/**
+ * run_printf - READS TROUGH the format string for _printf..
+ * @format: CHAR STRING to print - may contain directives..
+ * @output: A buffer_t STRUCT containing a BUFFER..
+ * @args: A va_list of ARGUMENTS..
+ *
+ * RETURN: The NUM of characters stored to OUTPUT..
+ */
+
+int run_printf(const char *format, va_list args, buffer_t *output)
+{
+	int Z, wid, prec, ret = 0;
+	char tmp;
+	unsigned char flags, len;
+	unsigned int (*f)(va_list, buffer_t *,
+			unsigned char, int, int, unsigned char);
+
+	for (Z = 0; *(format + Z); Z++)
+	{
+		len = 0;
+		if (*(format + Z) == '%')
+		{
+			tmp = 0;
+			flags = handle_flags(format + Z + 1, &tmp);
+			wid = handle_width(args, format + Z + tmp + 1, &tmp);
+			prec = handle_precision(args, format + Z + tmp + 1,
+					&tmp);
+			len = handle_length(format + Z + tmp + 1, &tmp);
+
+			f = handle_specifiers(format + Z + tmp + 1);
+			if (f != NULL)
+			{
+				Z += tmp + 1;
+				ret += f(args, output, flags, wid, prec, len);
+				continue;
+			}
+			else if (*(format + Z + tmp + 1) == '\0')
+			{
+				ret = -1;
+				break;
+			}
+		}
+		ret += _memcpy(output, (format + Z), 1);
+		Z += (len != 0) ? 1 : 0;
+	}
+	cleanup(args, output);
+	return (ret);
+}
+
+/**
+ * _printf - OUTPUTS a formatted string..
+ * @format: CHARACTER string to print - may contain directives.
+ *
+ * RETURN: The number of CHARACTERS printed..
  */
 
 int _printf(const char *format, ...)
 {
-	int f, printed = 0, printed_chars = 0;
-	int flags, width, precision, size, buff_ind = 0;
-	va_list list;
-	char buffer[BUFF_SIZE];
+	buffer_t *output;
+	va_list args;
+	int ret;
 
 	if (format == NULL)
 		return (-1);
+	output = init_buffer();
+	if (output == NULL)
+		return (-1);
 
-	va_start(list, format);
+	va_start(args, format);
 
-	for (f = 0; format && format[f] != '\0'; f++)
-	{
-		if (format[f] != '%')
-		{
-			buffer[buff_ind++] = format[f];
-			if (buff_ind == BUFF_SIZE)
-				print_buffer(buffer, &buff_ind);
-			/* write(1, &format[f], 1);*/
-			printed_chars++;
-		}
-		else
-		{
-			print_buffer(buffer, &buff_ind);
-			flags = get_flags(format, &f);
-			width = get_width(format, &f, list);
-			precision = get_precision(format, &f, list);
-			size = get_size(format, &f);
-			++f;
-			printed = handle_print(format, &f, list, buffer,
-				flags, width, precision, size);
-			if (printed == -1)
-				return (-1);
-			printed_chars += printed;
-		}
-	}
+	ret = run_printf(format, args, output);
 
-	print_buffer(buffer, &buff_ind);
-
-	va_end(list);
-
-	return (printed_chars);
-}
-
-/**
- * print_buffer -PRINTS THE contents of the buffer if it exist..
- * @buffer: Array of characters..
- * @buff_ind: INDEX at which to add next char, REPRESENTS the length..
- */
-
-void print_buffer(char buffer[], int *buff_ind)
-{
-	if (*buff_ind > 0)
-		write(1, &buffer[0], *buff_ind);
-
-	*buff_ind = 0;
+	return (ret);
 }
